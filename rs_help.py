@@ -21,7 +21,7 @@ class MyRealsense:
     rs_lens_buffer(num_frames)
     rs_stop_pipe()
     rs_align_and_update_frames()
-    rs_get_ground_mask()
+    rs_get_ground_obstacle_mask()
     ############################
 
     """
@@ -167,11 +167,12 @@ class MyRealsense:
         return cv.inRange(self.rs_depth_frame, np.array(bound_lower), np.array(bound_upper))
 
     # generates a mask that only allows the stuff at the same depth as the ground pass
+    # also generates a mask that allows anything above the ground and below the sky pass
     # the first call will be slow because it has to generate a new image estimating the depth of the ground
     # height is the height of the camera above the ground in mm
     # angle is the angle below the horizontal of the camera in degrees
     # only works if rs_align_and_update_frames() is called first
-    def rs_get_ground_mask(self, height, angle):
+    def rs_get_ground_obstacle_mask(self, height, angle):
         if height != self.height_above_ground or angle != self.angle_below_horizontal:
             # set variables so it won't recalculate next time
             self.height_above_ground = height
@@ -207,8 +208,10 @@ class MyRealsense:
 
         height_map = cv.subtract(self.rs_depth_frame.astype(np.int32),
                                  self.ground_depth_estimation_img.astype(np.int32))
-        height_map_mask = cv.inRange(height_map, 0, 2 ** 16)
-        return height_map_mask
+        ground_mask = cv.inRange(height_map, 1, 2 ** 16)
+        object_mask = cv.inRange(height_map, -2**16 + 100, -1)
+
+        return ground_mask, object_mask
 
 
 
