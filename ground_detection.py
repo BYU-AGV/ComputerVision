@@ -11,9 +11,9 @@ myGroundDetector.rs_configure()
 myGroundDetector.rs_start_pipe()
 
 # height and rotation in mm and in radians
-height = 122
+height = 150
 rotation = (90-0) * math.pi / 180
-fov = 10 * math.pi / 180
+fov = 85 * math.pi / 180
 
 transVec = np.array([0, 0, 200])
 rotMat = np.array([[1, 0, 0],
@@ -23,18 +23,19 @@ rotMat = np.array([[1, 0, 0],
 aspectRatio = myGroundDetector.rs_width/myGroundDetector.rs_height
 
 groundFilterIMG = np.zeros((myGroundDetector.rs_height, myGroundDetector.rs_width))
-for u in range(myGroundDetector.rs_width):
-    for v in range(myGroundDetector.rs_height):
-        rayDirection = np.array([(2*(u/myGroundDetector.rs_width)-1)*aspectRatio*math.tan(fov/2),
-                                (1-2*(v/myGroundDetector.rs_height))*math.tan(fov/2),
-                                -1])
-        rayDirection = np.matmul(rayDirection, rotMat)
-        magnitude = math.sqrt(rayDirection[0]**2 + rayDirection[1]**2 + rayDirection[2]**2)
-        rayDirection = rayDirection/magnitude
-        depth = 2**16
-        if rayDirection[2] < (-height / 2**16):
-            depth = -height / rayDirection[2]
 
+for v in range(myGroundDetector.rs_height):
+    rayDirection = np.array([-1 * aspectRatio * math.tan(fov / 2),
+                             (1 - 2 * (v / myGroundDetector.rs_height)) * math.tan(fov / 2),
+                             -1])
+    rayDirection = np.matmul(rayDirection, rotMat)
+    magnitude = math.sqrt(rayDirection[0] ** 2 + rayDirection[1] ** 2 + rayDirection[2] ** 2)
+    rayDirection = rayDirection / magnitude
+    depth = 2 ** 16
+    if rayDirection[2] < (-height / 2 ** 16):
+        depth = -height / rayDirection[2]
+
+    for u in range(myGroundDetector.rs_width):
         groundFilterIMG[v][u] = depth
 graphicalGFI = cv2.applyColorMap(cv2.convertScaleAbs(groundFilterIMG, alpha=0.03), cv2.COLORMAP_JET)
 cv2.namedWindow("Linear Gradient", cv2.WINDOW_AUTOSIZE)
