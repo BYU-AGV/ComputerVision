@@ -11,7 +11,7 @@ myGroundDetector.rs_configure()
 myGroundDetector.rs_start_pipe()
 
 # height and rotation in mm and in radians
-height = 150
+height = 130
 angle = 0
 
 try:
@@ -25,8 +25,8 @@ try:
         groundMask, objectMask = myGroundDetector.rs_get_ground_obstacle_mask(height, angle)
         groundIMG = cv2.bitwise_and(color_frame, color_frame, mask=groundMask)
         objectIMG = cv2.bitwise_and(color_frame, color_frame, mask=objectMask)
-
-        # Mask the color image with the opposite to get the sky
+        LinesMask = myGroundDetector.rs_get_filtered_color([35, 65, 230], [15, 65, 30])
+        LinesIMG = cv2.bitwise_and(groundIMG, groundIMG, mask=LinesMask)
 
         # Stack both images horizontally
         images = np.hstack((groundIMG, objectIMG))

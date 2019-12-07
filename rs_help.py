@@ -139,17 +139,17 @@ class MyRealsense:
         if bound_lower[0] < 0:
             bound_lower[0] = 0
         if bound_lower[1] < 0:
-            bound_lower[0] = 0
+            bound_lower[1] = 0
         if bound_lower[2] < 0:
-            bound_lower[0] = 0
+            bound_lower[2] = 0
         if bound_upper[0] > 179:
             bound_upper[0] = 179
         if bound_upper[1] > 255:
             bound_upper[1] = 255
         if bound_upper[2] > 255:
-            bound_upper[2] = 179
+            bound_upper[2] = 255
         # return filtered frame
-        return cv.inRange(self.rs_color_frame, np.array(bound_lower), np.array(bound_upper))
+        return cv.inRange(cv.cvtColor(self.rs_color_frame, cv.COLOR_RGB2HSV), np.array(bound_lower), np.array(bound_upper))
 
     def rs_get_filtered_depth(self, depth, thresh):
         """
