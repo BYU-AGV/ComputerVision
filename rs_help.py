@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 import cv2 as cv
 import numpy as np
 import pyrealsense2 as rs
+import math
 
 class MyRealsense:
     """
@@ -20,6 +21,7 @@ class MyRealsense:
     rs_lens_buffer(num_frames)
     rs_stop_pipe()
     rs_align_and_update_frames()
+    rs_get_ground_obstacle_mask()
     ############################
 
     """
@@ -38,6 +40,12 @@ class MyRealsense:
         self.rs_width = 640
         self.rs_height = 480
         self.rs_frame_rate = 30
+
+        # variables for storing previously used ground plane estimation image so it doesn't have to recompute it each
+        # frame
+        self.height_above_ground = 0
+        self.angle_below_horizontal = 0
+        self.ground_depth_estimation_img = np.zeros((self.rs_height, self.rs_width))
 
     def rs_configure(self):
         try:
@@ -131,17 +139,17 @@ class MyRealsense:
         if bound_lower[0] < 0:
             bound_lower[0] = 0
         if bound_lower[1] < 0:
-            bound_lower[0] = 0
+            bound_lower[1] = 0
         if bound_lower[2] < 0:
-            bound_lower[0] = 0
+            bound_lower[2] = 0
         if bound_upper[0] > 179:
             bound_upper[0] = 179
         if bound_upper[1] > 255:
             bound_upper[1] = 255
         if bound_upper[2] > 255:
-            bound_upper[2] = 179
+            bound_upper[2] = 255
         # return filtered frame
-        return cv.inRange(self.rs_color_frame, np.array(bound_lower), np.array(bound_upper))
+        return cv.inRange(cv.cvtColor(self.rs_color_frame, cv.COLOR_RGB2HSV), np.array(bound_lower), np.array(bound_upper))
 
     def rs_get_filtered_depth(self, depth, thresh):
         """
@@ -157,6 +165,53 @@ class MyRealsense:
             bound_lower[0] = 0.0
         # return filtered frame
         return cv.inRange(self.rs_depth_frame, np.array(bound_lower), np.array(bound_upper))
+
+    # generates a mask that only allows the stuff at the same depth as the ground pass
+    # also generates a mask that allows anything above the ground and below the sky pass
+    # the first call will be slow because it has to generate a new image estimating the depth of the ground
+    # height is the height of the camera above the ground in mm
+    # angle is the angle below the horizontal of the camera in degrees
+    # only works if rs_align_and_update_frames() is called first
+    def rs_get_ground_obstacle_mask(self, height, angle):
+        if height != self.height_above_ground or angle != self.angle_below_horizontal:
+            # set variables so it won't recalculate next time
+            self.height_above_ground = height
+            self.angle_below_horizontal = angle
+
+            # recalculate the ground depth estimation image
+
+            # initial variables set up
+            aspect_ratio = self.rs_width / self.rs_height
+            fov = 85 * math.pi / 180
+            rotation = (90 - angle) * math.pi / 180
+            rot_mat = np.array([[1, 0, 0],
+                               [0, math.cos(-rotation), -math.sin(-rotation)],
+                               [0, math.sin(-rotation), math.cos(-rotation)]])
+
+            # get depth for particular row by estimating depth of center pixel
+            for v in range(self.rs_height):
+                ray_direction = np.array([-1 * aspect_ratio * math.tan(fov / 2),
+                                         (1 - 2 * (v / self.rs_height)) * math.tan(fov / 2),
+                                         -1])
+                ray_direction = np.matmul(ray_direction, rot_mat)
+                magnitude = math.sqrt(ray_direction[0] ** 2 + ray_direction[1] ** 2 + ray_direction[2] ** 2)
+                ray_direction = ray_direction / magnitude
+                estimated_depth = 2 ** 16
+                if ray_direction[2] < (-height / 2 ** 16):
+                    estimated_depth = -height / ray_direction[2]
+
+                # set all of the pixels in the row to the estimated depth
+                for u in range(self.rs_width):
+                    self.ground_depth_estimation_img[v][u] = estimated_depth
+
+        # now the estimation image is updated, so we compare it with the last depth image taken to generate the mask
+
+        height_map = cv.subtract(self.rs_depth_frame.astype(np.int32),
+                                 self.ground_depth_estimation_img.astype(np.int32))
+        ground_mask = cv.inRange(height_map, 1, 2 ** 16)
+        object_mask = cv.inRange(height_map, -2**16 + 100, -1)
+
+        return ground_mask, object_mask
 
 
 
