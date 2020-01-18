@@ -72,6 +72,7 @@ try:
 
         # Wait for a coherent pair of frames: depth and color
         myRealSense.rs_align_and_update_frames()
+
         color_frame = myRealSense.rs_color_frame
         hsv_frame = cv2.cvtColor(color_frame, cv2.COLOR_RGB2HSV)
         depth_frame = myRealSense.rs_get_depth()
@@ -85,7 +86,7 @@ try:
         (minVal, maxVal, minLoc, maxLoc) = cv2.minMaxLoc(groundIMGValue)
         # Stack both images horizontally
         brightestColor = groundIMG[maxLoc[1], maxLoc[0]]
-        brightestColor = average_colors(brightestColor, )
+        brightestColor = average_colors(brightestColor)
         print(maxLoc)
         print(brightestColor)
         LinesMask = get_filtered_color(groundIMG, brightestColor, [50, 65, 100])
