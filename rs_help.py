@@ -209,7 +209,7 @@ class MyRealsense:
 
             # initial variables set up
             aspect_ratio = self.rs_width / self.rs_height
-            fov = 85 * math.pi / 180
+            fov = 58 * math.pi / 180
             rotation = (90 - angle) * math.pi / 180
             rot_mat = np.array([[1, 0, 0],
                                [0, math.cos(-rotation), -math.sin(-rotation)],

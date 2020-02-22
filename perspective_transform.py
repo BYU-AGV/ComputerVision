@@ -7,6 +7,37 @@ import rs_help
 import time
 
 
+def get_map(depth):
+    MAX_DIM_CM = 20
+    ANGLE_RAD = float(50 * np.pi / 180)
+
+    # grab shape
+    height, width = depth.shape
+
+    if 'tanLUT' not in get_map.__dict__:
+        tanLUT = np.zeros(width)
+        for column in range(width):
+            tanLUT[column] = np.tan(ANGLE_RAD/2 - (ANGLE_RAD * column/width))
+
+    # create map accumulator for data
+    myMap = np.zeros((MAX_DIM_CM, MAX_DIM_CM))
+
+    # update shapes
+    height, width = depth.shape
+
+    for row in range(height):
+        for column in range(width):
+            z = depth[row, column]/10  # grab depth and convert to cm
+            if z == 0:  # ignore if depth mask is zero
+                continue
+            x = tanLUT[column]*z  # get x distance from middle horizontal
+            if int(z) >= MAX_DIM_CM or int(z) < 0 or int(abs(x)) >= int(MAX_DIM_CM/2):
+                continue  # if depth will fall outside of accumulator, just skip placing
+            else:
+                myMap[int(MAX_DIM_CM-z), int(MAX_DIM_CM/2 - x)] += 1
+
+    return myMap
+
 def get_filtered_color(color_frame, base_color, thresh):
     """
     will filter the class color frame with parameters
@@ -34,7 +65,7 @@ def get_filtered_color(color_frame, base_color, thresh):
 
 
 # number of frames to average together
-N = 200
+N = 10
 
 
 def average_colors(newest_color):
@@ -65,10 +96,10 @@ myRealSense.rs_configure()
 myRealSense.rs_start_pipe()
 
 # height and rotation in mm and in radians
-height = 170
+height = 130
 angle = 0
 # max depth analyzed
-max_depth = 1000
+max_depth = 3000
 max_depth_y_coord = 0
 myRealSense.rs_align_and_update_frames()
 groundMask, objectMask = myRealSense.rs_get_ground_obstacle_mask(height, angle)
@@ -77,8 +108,8 @@ for v in range(myRealSense.rs_height):
     if myRealSense.ground_depth_estimation_img[myRealSense.rs_height-v-1][0] < max_depth:
         max_depth_y_coord = myRealSense.rs_height-v-1
 
-new_img_width = 2*max_depth*math.tan(85/2 * (math.pi / 180))
-new_img_min_width = 2*min_depth*math.tan(85/2 * (math.pi / 180))
+new_img_width = 2*max_depth*math.tan(58/2 * (math.pi / 180))
+new_img_min_width = 2*min_depth*math.tan(58/2 * (math.pi / 180))
 new_img_center = new_img_width / 2
 
 # define matrix for perspective transform
@@ -124,13 +155,16 @@ try:
         # Perform perspective transform on the lines mask
         transformed_color = cv2.warpPerspective(LinesDepthIMG, perspective_transform_mat, (int(new_img_width), int(max_depth)))
         transformed_lines = cv2.warpPerspective(LinesMask, perspective_transform_mat, (int(new_img_width), int(max_depth)))
-        transformed_linesorobject = cv2.warpPerspective(linesOrObject, perspective_transform_mat, (int(new_img_width), int(max_depth)))
+        transformed_lines_or_object = cv2.warpPerspective(linesOrObject, perspective_transform_mat, (int(new_img_width), int(max_depth)))
         #plt.subplot(121), plt.imshow(LinesMask), plt.title('Input')
         #plt.subplot(122), plt.imshow(transformed_color), plt.title('Output')
         #plt.show()
 
+        lines_or_object_depth = cv2.bitwise_and(depth_frame, depth_frame, mask=linesOrObject)
+        #other_transformed_lines_or_object = get_map(lines_or_object_depth)
+
         # Stack both images horizontally
-        images = np.hstack((groundThinMask, cv2.resize(transformed_linesorobject, (int(new_img_width * myRealSense.rs_height / max_depth), myRealSense.rs_height))))
+        images = np.hstack((linesOrObject, cv2.resize(transformed_lines_or_object, (int(new_img_width * myRealSense.rs_height / max_depth), myRealSense.rs_height))))
 
         # Show images
         cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
