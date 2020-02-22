@@ -65,7 +65,7 @@ myRealSense.rs_configure()
 myRealSense.rs_start_pipe()
 
 # height and rotation in mm and in radians
-height = 130
+height = 170
 angle = 0
 # max depth analyzed
 max_depth = 1000
@@ -100,6 +100,10 @@ try:
 
         # Mask the color image to get the ground
         groundMask, objectMask = myRealSense.rs_get_ground_obstacle_mask(height, angle)
+        sobely = -cv2.Sobel(objectMask, cv2.CV_64F, 0, 1, ksize=5)
+        groundThinMask = cv2.inRange(sobely, 1, 2 ** 16)
+        groundThinMask = cv2.erode(groundThinMask, cv2.getStructuringElement(cv2.MORPH_RECT, (13, 1)))
+        groundThinMask = cv2.dilate(groundThinMask, cv2.getStructuringElement(cv2.MORPH_RECT, (13, 1)))
         groundIMG = cv2.GaussianBlur(cv2.bitwise_and(hsv_frame, hsv_frame, mask=groundMask), (5, 5), 2)
         objectIMG = cv2.bitwise_and(color_frame, color_frame, mask=objectMask)
         groundIMGValue = groundIMG[:, :, 2]
@@ -115,20 +119,24 @@ try:
 
         LinesDepthIMG = cv2.bitwise_and(colored_depth_frame, colored_depth_frame, mask=LinesMask)
 
+        linesOrObject = cv2.bitwise_or(LinesMask, groundThinMask)
+
         # Perform perspective transform on the lines mask
-        transformed_color = cv2.warpPerspective(LinesMask, perspective_transform_mat, (int(new_img_width), int(max_depth)))
+        transformed_color = cv2.warpPerspective(LinesDepthIMG, perspective_transform_mat, (int(new_img_width), int(max_depth)))
+        transformed_lines = cv2.warpPerspective(LinesMask, perspective_transform_mat, (int(new_img_width), int(max_depth)))
+        transformed_linesorobject = cv2.warpPerspective(linesOrObject, perspective_transform_mat, (int(new_img_width), int(max_depth)))
         #plt.subplot(121), plt.imshow(LinesMask), plt.title('Input')
         #plt.subplot(122), plt.imshow(transformed_color), plt.title('Output')
         #plt.show()
 
         # Stack both images horizontally
-        #images = np.hstack((groundIMG, transformed_color))
+        images = np.hstack((groundThinMask, cv2.resize(transformed_linesorobject, (int(new_img_width * myRealSense.rs_height / max_depth), myRealSense.rs_height))))
 
         # Show images
         cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
         # cv2.imshow('Normal Image', color_image)
         # cv2.imshow('Depth Image', depth_image)
-        cv2.imshow('RealSense', transformed_color)
+        cv2.imshow('RealSense', images)
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
             break

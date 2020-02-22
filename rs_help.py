@@ -237,6 +237,8 @@ class MyRealsense:
                                  self.ground_depth_estimation_img.astype(np.int32))
         ground_mask = cv.inRange(height_map, 1, 2 ** 16)
         object_mask = cv.inRange(height_map, -2**16 + 100, -1)
+        sky_mask = cv.inRange(self.rs_depth_frame.astype(np.int32), 0, 5)
+        object_mask = cv.bitwise_xor(object_mask, cv.bitwise_and(object_mask, sky_mask))
 
         return ground_mask, object_mask
 
