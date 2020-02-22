@@ -149,7 +149,34 @@ class MyRealsense:
         if bound_upper[2] > 255:
             bound_upper[2] = 255
         # return filtered frame
-        return cv.inRange(cv.cvtColor(self.rs_color_frame, cv.COLOR_RGB2HSV), np.array(bound_lower), np.array(bound_upper))
+        return cv.inRange(cv.cvtColor(self.rs_color_frame, cv.COLOR_RGB2HSV),
+                          np.array(bound_lower), np.array(bound_upper))
+
+    @staticmethod
+    def rs_get_filtered_color_of_frame(color_frame, base_color, thresh):
+        """
+        will filter the class color frame with parameters
+        :param color_frame:
+        :param base_color:
+        :param thresh:
+        :return:
+        """
+        bound_lower = [base_color[0] - thresh[0], base_color[1] - thresh[1], base_color[2] - thresh[2]]
+        bound_upper = [base_color[0] + thresh[0], base_color[1] + thresh[1], base_color[2] + thresh[2]]
+        if bound_lower[0] < 0:
+            bound_lower[0] = 0
+        if bound_lower[1] < 0:
+            bound_lower[1] = 0
+        if bound_lower[2] < 0:
+            bound_lower[2] = 0
+        if bound_upper[0] > 179:
+            bound_upper[0] = 179
+        if bound_upper[1] > 255:
+            bound_upper[1] = 255
+        if bound_upper[2] > 255:
+            bound_upper[2] = 255
+        # return filtered frame
+        return cv.inRange(color_frame, np.array(bound_lower), np.array(bound_upper))
 
     def rs_get_filtered_depth(self, depth, thresh):
         """
@@ -210,16 +237,66 @@ class MyRealsense:
                                  self.ground_depth_estimation_img.astype(np.int32))
         ground_mask = cv.inRange(height_map, 1, 2 ** 16)
         object_mask = cv.inRange(height_map, -2**16 + 100, -1)
+        sky_mask = cv.inRange(self.rs_depth_frame.astype(np.int32), 0, 5)
+        object_mask = cv.bitwise_xor(object_mask, cv.bitwise_and(object_mask, sky_mask))
 
         return ground_mask, object_mask
 
+# Runs super slowly. Don't use
+    def rs_get_line_points(self, height, angle):
+        def average_colors(newest_color):
+            if 'colorRGB' not in average_colors.__dict__:
+                average_colors.colorRGB = np.array([newest_color])
 
+            N = 200
 
+            # create / update colorRGB array
+            array_size = average_colors.colorRGB.shape[0]
+            if array_size <= N:
+                average_colors.colorRGB = np.vstack((average_colors.colorRGB, newest_color))
+            else:
+                for i in range(0, N - 1):
+                    average_colors.colorRGB[i] = average_colors.colorRGB[i + 1]
+                average_colors.colorRGB[N - 1] = newest_color
 
+            # average everything together
+            row, col = average_colors.colorRGB.shape
+
+            b = np.convolve(average_colors.colorRGB[:, 0], np.ones(row) / row, mode='valid')
+            g = np.convolve(average_colors.colorRGB[:, 1], np.ones(row) / row, mode='valid')
+            r = np.convolve(average_colors.colorRGB[:, 2], np.ones(row) / row, mode='valid')
+            averaged_color = np.concatenate((b, g, r), axis=0)
+            return averaged_color
+
+        line_points = []
+
+        color_frame = self.rs_color_frame
+        hsv_frame = cv.cvtColor(color_frame, cv.COLOR_RGB2HSV)
+        depth_frame = self.rs_get_depth()
+        colored_depht_frame = cv.applyColorMap(cv.convertScaleAbs(depth_frame, alpha=0.03), cv.COLORMAP_JET)
+
+        # Mask the color image to get the ground
+        groundMask, objectMask = self.rs_get_ground_obstacle_mask(height, angle)
+        groundIMG = cv.GaussianBlur(cv.bitwise_and(hsv_frame, hsv_frame, mask=groundMask), (5, 5), 2)
+        groundIMGValue = groundIMG[:, :, 2]
+        (minVal, maxVal, minLoc, maxLoc) = cv.minMaxLoc(groundIMGValue)
+        # Stack both images horizontally
+        brightestColor = groundIMG[maxLoc[1], maxLoc[0]]
+        brightestColor = average_colors(brightestColor)
+        print(maxLoc)
+        print(brightestColor)
+        LinesMask = self.rs_get_filtered_color_of_frame(groundIMG, brightestColor, [50, 65, 100])
+        LinesIMG = cv.bitwise_and(color_frame, color_frame, mask=LinesMask)
+
+        for x in range(0, self.rs_width):
+            for y in range(0, self.rs_height):
+                if LinesMask[y, x] == 255:
+                    line_points.append(rs.rs2_deproject_pixel_to_point(
+                        self.rs_pipeline.get_active_profile().get_stream(rs.stream.depth).as_video_stream_profile().get_intrinsics(),
+                                                                       [y, x], float(depth_frame[y, x])))
+
+        return line_points
 
 
 if __name__ == '__main__':
     print('hello world')
-
-
-
