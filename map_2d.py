@@ -2,7 +2,7 @@ import numpy as np
 import cv2 as cv
 import matplotlib.pyplot as plt
 
-MAX_DIM_CM = 600
+MAX_DIM_CM = 100
 ANGLE_RAD = float(50*np.pi/180)
 
 
@@ -35,13 +35,21 @@ def get_map(color, depth):
 
     # filter for colors
     # filter for lines
-    cans = filter_color(hsv=hsv, color=[10, 230, 130], thresh=[5, 25, 40])
+
+    # filter for cans
+    cans = filter_color(hsv=hsv, color=[10, 240, 130], thresh=[5, 30, 50])
 
     # yellow cones
     y_cones = filter_color(hsv=hsv, color=[25, 140, 160], thresh=[15, 20, 25])
 
+
     # green cones
     # g_cones = filter_color(hsv=hsv, color=[55, 255, 21], thresh=[15, 70, 25])
+
+
+    # plt.imshow(hsv)
+    # plt.show()
+
 
     # combine masks and reduce to binary
     mask = cans + y_cones
